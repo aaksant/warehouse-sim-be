@@ -1,0 +1,64 @@
+# =========================
+# Go build artifacts
+# =========================
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go coverage
+coverage.out
+coverage.html
+
+# Go workspace
+go.work.sum
+
+# =========================
+# Environment variables
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# TLS certificates
+# =========================
+cert.pem
+key.pem
+certs/
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+
+# =========================
+# IDE
+# =========================
+
+# VS Code
+.vscode/
+
+# GoLand / IntelliJ
+.idea/
+
+# =========================
+# OS files
+# =========================
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# =========================
+# Temporary files
+# =========================
+tmp/
+temp/
