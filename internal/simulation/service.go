@@ -19,6 +19,59 @@ func NewService(s store.Store) *Service {
 	}
 }
 
+// GetWarehouse returns a warehouse by ID
+func (svc *Service) GetWarehouse(ctx context.Context, warehouseID int) (domains.Warehouse, error) {
+	warehouses, err := svc.store.ListWarehouses(ctx)
+	if err != nil {
+		return domains.Warehouse{}, err
+	}
+	for _, w := range warehouses {
+		if w.ID == warehouseID {
+			return w, nil
+		}
+	}
+	return domains.Warehouse{}, domains.ErrNotImplemented
+}
+
+// GetUsedVolume returns the used volume for a warehouse based on its batches
+func (svc *Service) GetUsedVolume(ctx context.Context, warehouseID int) (float64, error) {
+	batches, err := svc.store.ListBatches(ctx, warehouseID)
+	if err != nil {
+		return 0, err
+	}
+	usedM3 := 0.0
+	for _, b := range batches {
+		pallets, err := domains.PalletsNeeded(domains.Load{
+			TotalTon:     b.TotalTon,
+			TonPerPallet: b.TonPerPallet,
+		})
+		if err != nil {
+			return 0, err
+		}
+		if pallets > 0 {
+			height := svc.spec.LoadHeightPerTonM * b.TonPerPallet
+			vol := svc.spec.LengthM * svc.spec.WidthM * height
+			usedM3 += float64(pallets) * vol
+		}
+	}
+	return usedM3, nil
+}
+
+// SaveBatch saves a batch to the store
+func (svc *Service) SaveBatch(ctx context.Context, b domains.Batch) error {
+	return svc.store.SaveBatch(ctx, b)
+}
+
+// FindBatch finds a batch by surat_jalan, material, and received_at
+func (svc *Service) FindBatch(ctx context.Context, suratJalan, material, receivedAt string) (*domains.Batch, error) {
+	return svc.store.FindBatch(ctx, suratJalan, material, receivedAt)
+}
+
+// GetSpec returns the pallet spec
+func (svc *Service) GetSpec() domains.PalletSpec {
+	return svc.spec
+}
+
 // WarehouseResult adalah hasil simulasi untuk satu gudang.
 type WarehouseResult struct {
 	WarehouseID   int               `json:"warehouse_id"`
