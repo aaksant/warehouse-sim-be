@@ -53,3 +53,14 @@ func (s *Store) SaveBatch(ctx context.Context, b domains.Batch) error {
 	s.batches = append(s.batches, b)
 	return nil
 }
+
+func (s *Store) FindBatch(ctx context.Context, suratJalan, material, receivedAt string) (*domains.Batch, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for i, b := range s.batches {
+		if b.SuratJalan == suratJalan && b.Material == material && b.ReceivedAt.Format("2006-01-02") == receivedAt {
+			return &s.batches[i], nil
+		}
+	}
+	return nil, nil
+}
