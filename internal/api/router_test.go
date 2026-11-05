@@ -164,3 +164,151 @@ func TestListWarehousesHandler(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateBatchHandler(t *testing.T) {
+	store := memory.New()
+	service := simulation.NewService(store)
+
+	tests := []struct {
+		name         string
+		reqBody      BatchRequest
+		wantStatus   int
+		wantErrorKey string
+	}{
+		{
+			name: "sukses: batch baru",
+			reqBody: BatchRequest{
+				SuratJalan:   "SJ-001",
+				Material:     "Batu Bata",
+				ReceivedAt:   "2026-11-03",
+				TotalTon:     10,
+				TonPerPallet: 1,
+				WarehouseID:  1,
+			},
+			wantStatus:   http.StatusCreated,
+			wantErrorKey: "",
+		},
+		{
+			name: "field kurang (total_ton 0) -> 400",
+			reqBody: BatchRequest{
+				SuratJalan:   "SJ-002",
+				Material:     "Batu Bata",
+				ReceivedAt:   "2026-11-03",
+				TotalTon:     0,
+				TonPerPallet: 1,
+				WarehouseID:  1,
+			},
+			wantStatus:   http.StatusBadRequest,
+			wantErrorKey: "",
+		},
+		{
+			name: "duplikat (surat_jalan + material + tanggal sama) -> 409",
+			reqBody: BatchRequest{
+				SuratJalan:   "SJ-001",
+				Material:     "Batu Bata",
+				ReceivedAt:   "2026-11-03",
+				TotalTon:     5,
+				TonPerPallet: 1,
+				WarehouseID:  1,
+			},
+			wantStatus:   http.StatusConflict,
+			wantErrorKey: "error",
+		},
+		{
+			name: "tidak muat di gudang -> 422",
+			reqBody: BatchRequest{
+				SuratJalan:   "SJ-003",
+				Material:     "Batu Bata",
+				ReceivedAt:   "2026-11-03",
+				TotalTon:     1000,
+				TonPerPallet: 1,
+				WarehouseID:  1,
+			},
+			wantStatus:   http.StatusUnprocessableEntity,
+			wantErrorKey: "error",
+		},
+		{
+			name: "warehouse_id tidak ada -> 400",
+			reqBody: BatchRequest{
+				SuratJalan:   "SJ-004",
+				Material:     "Batu Bata",
+				ReceivedAt:   "2026-11-03",
+				TotalTon:     1,
+				TonPerPallet: 1,
+				WarehouseID:  999,
+			},
+			wantStatus:   http.StatusBadRequest,
+			wantErrorKey: "error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, _ := json.Marshal(tt.reqBody)
+			req := httptest.NewRequest(http.MethodPost, "/api/batches", bytes.NewBuffer(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router := NewRouter(service)
+			router.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+
+			if tt.wantErrorKey != "" {
+				var res map[string]any
+				json.Unmarshal(w.Body.Bytes(), &res)
+				if _, ok := res[tt.wantErrorKey]; !ok {
+					t.Errorf("response should have %s field", tt.wantErrorKey)
+				}
+			}
+		})
+	}
+
+	// Test used_m3 naik setelah batch dibuat
+	t.Run("used_m3 naik setelah batch dibuat", func(t *testing.T) {
+		// Check initial state
+		req := httptest.NewRequest(http.MethodGet, "/api/warehouses", nil)
+		w := httptest.NewRecorder()
+		router := NewRouter(service)
+		router.ServeHTTP(w, req)
+
+		var res map[string]any
+		json.Unmarshal(w.Body.Bytes(), &res)
+		warehouses := res["warehouses"].([]any)
+		initialUsed := warehouses[0].(map[string]any)["used_volume_m3"].(float64)
+
+		// Create batch
+		batch := BatchRequest{
+			SuratJalan:   "SJ-TEST",
+			Material:     "Batu Bata",
+			ReceivedAt:   "2026-11-03",
+			TotalTon:     1,
+			TonPerPallet: 1,
+			WarehouseID:  1,
+		}
+		body, _ := json.Marshal(batch)
+		req = httptest.NewRequest(http.MethodPost, "/api/batches", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Fatalf("failed to create batch: status = %d", w.Code)
+		}
+
+		// Check after
+		req = httptest.NewRequest(http.MethodGet, "/api/warehouses", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		json.Unmarshal(w.Body.Bytes(), &res)
+		warehouses = res["warehouses"].([]any)
+		afterUsed := warehouses[0].(map[string]any)["used_volume_m3"].(float64)
+
+		if afterUsed <= initialUsed {
+			t.Errorf("used_volume_m3 should increase after batch, initial=%f, after=%f", initialUsed, afterUsed)
+		}
+	})
+}
