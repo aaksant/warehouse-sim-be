@@ -5,6 +5,19 @@ type CheckRequest struct {
 	TonPerPallet float64 `json:"ton_per_pallet" binding:"required,gt=0"`
 }
 
+type BatchRequest struct {
+	SuratJalan   string  `json:"surat_jalan" binding:"required"`
+	Material     string  `json:"material" binding:"required"`
+	ReceivedAt   string  `json:"received_at" binding:"required"`
+	TotalTon     float64 `json:"total_ton" binding:"required,gt=0"`
+	TonPerPallet float64 `json:"ton_per_pallet" binding:"required,gt=0"`
+	WarehouseID  int     `json:"warehouse_id" binding:"required"`
+}
+
+type BatchResponse struct {
+	ID string `json:"id"`
+}
+
 type CheckResponse struct {
 	Results []WarehouseCheckResult `json:"results"`
 }
